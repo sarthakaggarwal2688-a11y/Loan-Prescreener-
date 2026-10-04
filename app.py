@@ -59,11 +59,26 @@ def score(a):
     return dict(new_emi=new_emi, foir=foir, pts=pts, total=total, flags=flags, decision=decision)
 
 
+def get_key():
+    """Look for the key in environment, Streamlit secrets (any common spelling), or the sidebar box."""
+    key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not key:
+        try:
+            for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "gemini_api_key"):
+                if name in st.secrets:
+                    key = st.secrets[name]
+                    break
+        except Exception:
+            key = None
+    key = key or st.session_state.get("manual_key")
+    return str(key).strip().strip('"').strip("'") if key else None
+
+
 def explain(a, r):
     """Gemini writes the explanation. Rules already decided. Falls back to a template on any failure."""
     fallback = (f"Decision: {r['decision']} (score {r['total']}/100). Estimated EMI Rs {r['new_emi']:,.0f}; "
                 f"total obligations are {r['foir']:.0f}% of income. " + ("Flags: " + "; ".join(r["flags"]) if r["flags"] else ""))
-    key = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", None)
+    key = get_key()
     if not key:
         return fallback + "\n\n_(AI explanation unavailable: no API key.)_"
     system = ("You explain loan pre-screening results to a layperson in under 120 words. "
@@ -88,6 +103,14 @@ st.title("🏦 Loan Eligibility Pre-Screener")
 st.caption("Rules decide. AI explains. Indicative only - not financial advice or a lending decision.")
 st.info("Privacy: your explanation request is sent to Google's Gemini API (free tier may use inputs to improve Google products). "
         "Use only sample or fictitious data - never real personal details.")
+
+with st.sidebar:
+    st.subheader("API status")
+    if get_key():
+        st.success("Gemini API key found")
+    else:
+        st.error("No Gemini API key found")
+        st.text_input("Paste key here (temporary fix)", type="password", key="manual_key")
 
 s = st.selectbox("Load a sample applicant", list(SAMPLES))
 d = SAMPLES[s]
